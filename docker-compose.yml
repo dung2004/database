@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: dev-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${SA_PASSWORD}
+    ports:
+      - "14330:1433"       # host:container
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./db/init:/scripts:ro
+    healthcheck:
+      test: [ "CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "${SA_PASSWORD}", "-Q", "select 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  db_init:
+    image: mcr.microsoft.com/mssql-tools
+    depends_on:
+      mssql:
+        condition: service_healthy
+    volumes:
+      - ./db/init:/scripts:ro
+    entrypoint: /bin/bash -c "until /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P '${SA_PASSWORD}' -Q 'select 1' > /dev/null 2>&1; do sleep 1; done; /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P '${SA_PASSWORD}' -i /scripts/initdb.sql"
+
+volumes:
+  mssql-data:
